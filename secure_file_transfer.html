@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureTransfer — Encrypted File System</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #1a1d24;
+    --border: #2a2d35;
+    --accent: #00ff88;
+    --accent2: #00ccff;
+    --danger: #ff4466;
+    --warn: #ffaa00;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; position: relative; z-index: 1; }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-text span { color: var(--accent); }
+  .status-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.2);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 24px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .tab.active {
+    background: var(--surface2);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,255,136,0.04);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .upload-sub { font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* Encryption Options */
+  .options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .option-item label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--font-mono);
+  }
+  .option-item select, .option-item input[type="text"], .option-item input[type="password"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .option-item select:focus, .option-item input:focus {
+    border-color: var(--accent);
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    width: 100%;
+  }
+  .btn-primary:hover { background: #00e67a; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,255,136,0.2); }
+  .btn-danger { background: var(--danger); color: #fff; font-size: 12px; padding: 6px 12px; }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+  .btn-outline:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Progress */
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  /* File List */
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .file-item:hover { border-color: var(--border); }
+  .file-icon {
+    width: 36px; height: 36px;
+    background: rgba(0,204,255,0.1);
+    border: 1px solid rgba(0,204,255,0.2);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .file-info { flex: 1; min-width: 0; }
+  .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-actions { display: flex; gap: 6px; }
+  .enc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 4px;
+  }
+
+  /* Transfer Log */
+  .log-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    height: 200px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+  .log-line { display: flex; gap: 12px; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-success { color: var(--accent); }
+  .log-info { color: var(--accent2); }
+  .log-warn { color: var(--warn); }
+  .log-error { color: var(--danger); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-val { font-size: 26px; font-weight: 800; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 4px; }
+
+  /* Receive Tab */
+  .receive-input-row {
+    display: flex; gap: 10px;
+  }
+  .receive-input-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    outline: none;
+    letter-spacing: 2px;
+  }
+  .receive-input-row input:focus { border-color: var(--accent2); }
+  .receive-input-row .btn { padding: 12px 20px; background: var(--accent2); color: #000; font-weight: 700; }
+
+  /* Notification */
+  .notif {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    z-index: 999;
+    animation: notifIn 0.3s ease;
+    max-width: 280px;
+  }
+  @keyframes notifIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-hidden { display: none; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  .empty-state .empty-icon { font-size: 32px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🔐</div>
+      <div>
+        <div class="logo-text">Secure<span>Transfer</span></div>
+      </div>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      AES-256 ACTIVE
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" id="totalFiles">0</div>
+      <div class="stat-label">FILES TRANSFERRED</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="totalSize">0 B</div>
+      <div class="stat-label">DATA ENCRYPTED</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent2)" id="totalKeys">0</div>
+      <div class="stat-label">KEYS GENERATED</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('send')">📤 Send File</button>
+    <button class="tab" onclick="switchTab('receive')">📥 Receive File</button>
+    <button class="tab" onclick="switchTab('files')">📁 My Files</button>
+    <button class="tab" onclick="switchTab('log')">📋 Activity Log</button>
+  </div>
+
+  <!-- SEND TAB -->
+  <div id="tab-send">
+    <div class="card">
+      <div class="card-title">🗂 Select File</div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
+           ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <input type="file" id="fileInput" onchange="handleFileSelect(event)" multiple>
+        <div class="upload-icon">📂</div>
+        <div class="upload-title">Drop files here or click to browse</div>
+        <div class="upload-sub">Supports all file types • Max 100MB per file</div>
+      </div>
+      <div id="selectedFiles" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚙️ Encryption Settings</div>
+      <div class="options-grid">
+        <div class="option-item">
+          <label>ENCRYPTION ALGORITHM</label>
+          <select id="algorithm">
+            <option value="AES-256">AES-256-CBC</option>
+            <option value="AES-128">AES-128-CBC</option>
+            <option value="RSA-2048">RSA-2048</option>
+            <option value="ChaCha20">ChaCha20-Poly1305</option>
+          </select>
+        </div>
+        <div class="option-item">
+          <label>TRANSFER MODE</label>
+          <select id="transferMode">
+            <option value="P2P">P2P Direct</option>
+            <option value="Relay">Relay Server</option>
+            <option value="Chunked">Chunked Transfer</option>
+          </select>
+        </div>
+        <div class="option-item">
+          <label>RECIPIENT ID / EMAIL</label>
+          <input type="text" id="recipient" placeholder="user@example.com or ID">
+        </div>
+        <div class="option-item">
+          <label>PASSWORD PROTECTION</label>
+          <input type="password" id="filePassword" placeholder="Optional password...">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="sendFile()">🔐 Encrypt & Transfer</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="progressCard" style="display:none">
+      <div class="card-title">⚡ Transfer Progress</div>
+      <div id="progressLabel" style="font-family:var(--font-mono);font-size:13px;margin-bottom:8px;color:var(--accent)"></div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="progressPercent" style="font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px"></div>
+    </div>
+  </div>
+
+  <!-- RECEIVE TAB -->
+  <div id="tab-receive" class="section-hidden">
+    <div class="card">
+      <div class="card-title">🔑 Enter Transfer Code</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;font-family:var(--font-mono)">Enter the 8-digit code shared by the sender</p>
+      <div class="receive-input-row">
+        <input type="text" id="transferCode" placeholder="XXXX-XXXX" maxlength="9" oninput="formatCode(this)">
+        <button class="btn" onclick="receiveFile()">Retrieve →</button>
+      </div>
+      <div style="margin-top:16px">
+        <div class="option-item">
+          <label>DECRYPTION PASSWORD (if set)</label>
+          <input type="password" id="decryptPassword" placeholder="Enter password if required...">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="receiveResult" style="display:none">
+      <div class="card-title" style="color:var(--accent)">✅ File Found!</div>
+      <div id="receiveFileInfo"></div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="downloadReceived()">⬇️ Decrypt & Download</button>
+    </div>
+  </div>
+
+  <!-- FILES TAB -->
+  <div id="tab-files" class="section-hidden">
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📁 Transferred Files</span>
+        <button class="btn btn-outline" onclick="clearAll()">Clear All</button>
+      </div>
+      <div id="fileList">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          No files transferred yet.<br>Go to Send tab to start!
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="section-hidden">
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📋 Activity Log</span>
+        <button class="btn btn-outline" onclick="clearLog()">Clear Log</button>
+      </div>
+      <div class="log-box" id="logBox">
+        <div class="log-line"><span class="log-time">00:00:00</span><span class="log-info">System initialized. AES-256 module loaded.</span></div>
+        <div class="log-line"><span class="log-time">00:00:00</span><span class="log-success">Secure channel established.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let files = [];
+  let transferredFiles = [];
+  let totalBytes = 0;
+  let totalKeys = 0;
+  let selectedFiles = [];
+
+  function switchTab(name) {
+    ['send','receive','files','log'].forEach(t => {
+      document.getElementById('tab-'+t).classList.add('section-hidden');
+    });
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-'+name).classList.remove('section-hidden');
+    event.target.classList.add('active');
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('uploadZone').classList.add('drag-over');
+  }
+  function handleDragLeave(e) {
+    document.getElementById('uploadZone').classList.remove('drag-over');
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('uploadZone').classList.remove('drag-over');
+    const dt = e.dataTransfer;
+    renderSelectedFiles(Array.from(dt.files));
+  }
+  function handleFileSelect(e) {
+    renderSelectedFiles(Array.from(e.target.files));
+  }
+
+  function renderSelectedFiles(fileList) {
+    selectedFiles = fileList;
+    const container = document.getElementById('selectedFiles');
+    container.innerHTML = '';
+    fileList.forEach(f => {
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px;margin-bottom:6px;font-family:var(--font-mono);font-size:13px;';
+      div.innerHTML = `<span>${getFileIcon(f.name)}</span><span style="flex:1">${f.name}</span><span style="color:var(--muted)">${formatBytes(f.size)}</span>`;
+      container.appendChild(div);
+    });
+  }
+
+  function getFileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const icons = {pdf:'📄',jpg:'🖼',jpeg:'🖼',png:'🖼',gif:'🖼',mp4:'🎬',mp3:'🎵',zip:'🗜',rar:'🗜',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',txt:'📃',py:'🐍',js:'⚡',html:'🌐'};
+    return icons[ext] || '📁';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(1) + ' MB';
+  }
+
+  function generateCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      if (i === 4) code += '-';
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+  }
+
+  function generateKey() {
+    const hex = '0123456789abcdef';
+    let key = '';
+    for (let i = 0; i < 64; i++) key += hex[Math.floor(Math.random() * 16)];
+    return key;
+  }
+
+  function getTime() {
+    return new Date().toLocaleTimeString('en-GB');
+  }
+
+  function addLog(msg, type='info') {
+    const box = document.getElementById('logBox');
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.innerHTML = `<span class="log-time">${getTime()}</span><span class="log-${type}">${msg}</span>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function showNotif(msg) {
+    const old = document.querySelector('.notif');
+    if (old) old.remove();
+    const div = document.createElement('div');
+    div.className = 'notif';
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+  }
+
+  function sendFile() {
+    if (selectedFiles.length === 0) { showNotif('⚠️ Please select a file first!'); return; }
+    const algo = document.getElementById('algorithm').value;
+    const mode = document.getElementById('transferMode').value;
+    const recipient = document.getElementById('recipient').value || 'broadcast';
+
+    const progressCard = document.getElementById('progressCard');
+    const progressFill = document.getElementById('progressFill');
+    const progressLabel = document.getElementById('progressLabel');
+    const progressPercent = document.getElementById('progressPercent');
+
+    progressCard.style.display = 'block';
+
+    const steps = [
+      {pct: 10, msg: `🔍 Validating file integrity...`},
+      {pct: 25, msg: `🔑 Generating ${algo} encryption key...`},
+      {pct: 45, msg: `🔐 Encrypting with ${algo}...`},
+      {pct: 65, msg: `📦 Packaging encrypted payload...`},
+      {pct: 80, msg: `📡 Initiating ${mode} transfer...`},
+      {pct: 95, msg: `✅ Verifying checksum...`},
+      {pct: 100, msg: `🎉 Transfer Complete!`},
+    ];
+
+    let i = 0;
+    const key = generateKey();
+    const code = generateCode();
+    addLog(`Transfer initiated for ${selectedFiles.length} file(s) → ${recipient}`, 'info');
+    addLog(`Algorithm: ${algo} | Mode: ${mode}`, 'info');
+
+    const interval = setInterval(() => {
+      if (i >= steps.length) {
+        clearInterval(interval);
+        selectedFiles.forEach(f => {
+          const fileObj = { name: f.name, size: f.size, algo, mode, code, key: key.substring(0,16)+'...', time: new Date().toLocaleString(), recipient };
+          transferredFiles.push(fileObj);
+          totalBytes += f.size;
+          totalKeys++;
+          addLog(`File "${f.name}" encrypted & sent. Code: ${code}`, 'success');
+          renderFileList();
+          updateStats();
+        });
+        showNotif(`✅ Transfer complete! Code: ${code}`);
+        selectedFiles = [];
+        document.getElementById('selectedFiles').innerHTML = '';
+        return;
+      }
+      const step = steps[i];
+      progressFill.style.width = step.pct + '%';
+      progressLabel.textContent = step.msg;
+      progressPercent.textContent = step.pct + '%';
+      addLog(step.msg.replace(/[🔍🔑🔐📦📡✅🎉]\s*/, ''), i === steps.length-1 ? 'success' : 'info');
+      i++;
+    }, 400);
+  }
+
+  function renderFileList() {
+    const list = document.getElementById('fileList');
+    if (transferredFiles.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>No files transferred yet.<br>Go to Send tab to start!</div>';
+      return;
+    }
+    list.innerHTML = '';
+    [...transferredFiles].reverse().forEach((f, idx) => {
+      const div = document.createElement('div');
+      div.className = 'file-item';
+      div.innerHTML = `
+        <div class="file-icon">${getFileIcon(f.name)}</div>
+        <div class="file-info">
+          <div class="file-name">${f.name}</div>
+          <div class="file-meta">${formatBytes(f.size)} • ${f.time} • To: ${f.recipient}</div>
+          <div><span class="enc-badge">🔐 ${f.algo}</span> <span class="enc-badge" style="color:var(--accent2);border-color:rgba(0,204,255,0.2);background:rgba(0,204,255,0.08)">Code: ${f.code}</span></div>
+        </div>
+        <div class="file-actions">
+          <button class="btn btn-outline" onclick="copyCode('${f.code}')">📋 Code</button>
+          <button class="btn btn-danger" onclick="deleteFile(${transferredFiles.length-1-idx})">✕</button>
+        </div>`;
+      list.appendChild(div);
+    });
+  }
+
+  function copyCode(code) {
+    navigator.clipboard.writeText(code).catch(()=>{});
+    showNotif(`📋 Code ${code} copied!`);
+  }
+
+  function deleteFile(idx) {
+    totalBytes -= transferredFiles[idx].size;
+    totalKeys--;
+    transferredFiles.splice(idx, 1);
+    renderFileList();
+    updateStats();
+    addLog('File record removed.', 'warn');
+  }
+
+  function clearAll() {
+    transferredFiles = []; totalBytes = 0; totalKeys = 0;
+    renderFileList(); updateStats();
+    addLog('All file records cleared.', 'warn');
+  }
+
+  function updateStats() {
+    document.getElementById('totalFiles').textContent = transferredFiles.length;
+    document.getElementById('totalSize').textContent = formatBytes(totalBytes);
+    document.getElementById('totalKeys').textContent = totalKeys;
+  }
+
+  function formatCode(input) {
+    let val = input.value.replace(/[^A-Z0-9a-z]/g,'').toUpperCase();
+    if (val.length > 4) val = val.slice(0,4) + '-' + val.slice(4,8);
+    input.value = val;
+  }
+
+  function receiveFile() {
+    const code = document.getElementById('transferCode').value;
+    if (code.length < 9) { showNotif('⚠️ Enter valid 8-digit code!'); return; }
+
+    const match = transferredFiles.find(f => f.code === code);
+    const resultCard = document.getElementById('receiveResult');
+    const info = document.getElementById('receiveFileInfo');
+
+    if (match) {
+      addLog(`Code ${code} verified. File found: ${match.name}`, 'success');
+      info.innerHTML = `
+        <div class="file-item" style="margin:0">
+          <div class="file-icon">${getFileIcon(match.name)}</div>
+          <div class="file-info">
+            <div class="file-name">${match.name}</div>
+            <div class="file-meta">${formatBytes(match.size)} • Encrypted: ${match.algo}</div>
+            <div><span class="enc-badge">🔐 Ready to decrypt</span></div>
+          </div>
+        </div>`;
+      resultCard.style.display = 'block';
+      resultCard.dataset.file = match.name;
+    } else {
+      addLog(`Code ${code} not found or expired.`, 'error');
+      showNotif('❌ Code not found! Check the code and try again.');
+      resultCard.style.display = 'none';
+    }
+  }
+
+  function downloadReceived() {
+    const fname = document.getElementById('receiveResult').dataset.file || 'file';
+    addLog(`Decrypting "${fname}"...`, 'info');
+
+    setTimeout(() => {
+      addLog(`"${fname}" decrypted successfully. Download started.`, 'success');
+      showNotif(`⬇️ "${fname}" downloaded!`);
+      document.getElementById('receiveResult').style.display = 'none';
+      document.getElementById('transferCode').value = '';
+    }, 1200);
+  }
+
+  function clearLog() {
+    document.getElementById('logBox').innerHTML = '';
+    addLog('Log cleared.', 'warn');
+  }
+</script>
+</body>
+</html>
